@@ -5,28 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WindBorne Application Dashboard</title>
 
-  <!-- Google Fonts + Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Inknut+Antiqua:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-  <!-- Leaflet (for map) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <!-- Your CSS -->
   <link rel="stylesheet" href="../static/dashboard.css">
 </head>
 
 <body>
   <div id="dashboard">
-    <!-- Left Sidebar -->
         <div id="sidebar-left">
             <h2><i class="fa-solid fa-location-dot"></i> Balloon Info</h2>
         <div id="balloon-info">
             <p style="font-size: 1.2rem;">Select a balloon from the map to view details.</p>
         </div>
-
-        <!-- Information on which API combined with weather data and what the project is -->
         <div id="project-info" style="font-size: 0.8rem;">
             <h3><i class="fa-solid fa-info-circle"></i> About This Project</h3>
             <p>This dashboard visualizes real-time data from weather balloons, integrating meteorological data with a LSTM machine learning model to predict balloon positions for the next hour. The balloon data updates every 2.5 minutes, while weather feeds update less frequently.</p>
@@ -39,11 +33,8 @@
     </div>
 
     <!-- Map Container -->
-    <div id="map">
+    <div id="map"></div>
 
-    </div>
-
-    <!-- Right Sidebar -->
     <div id="sidebar-right">
         <h2><i class="fa-solid fa-brain"></i> Model Status</h2>
         <div id="model-info">

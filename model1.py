@@ -22,7 +22,7 @@ data = df[feature_cols].values
 
 X_full = data.reshape(len(df), hours, features_per_hour)
 
-# --- Create sequences (10-hour sliding windows) per balloon ---
+# Create sequences (10-hour sliding windows) per balloon
 sequence_length = 10
 X, y = [], []
 for sample in X_full:
@@ -32,10 +32,10 @@ for sample in X_full:
 
 X, y = np.array(X), np.array(y)
 
-# --- Split before scaling ---
+# Train test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# --- Fit scaler per feature (column-wise normalization) ---
+# Fit scaler per feature (column-wise normalization)
 scaler = MinMaxScaler()
 flat_train = X_train.reshape(-1, features_per_hour)
 scaler.fit(flat_train)
@@ -46,7 +46,7 @@ output_scaler.fit(y_train)
 # Save both scaler and feature order for app.py
 joblib.dump({"scaler": scaler, "features": feature_cols, "output_scaler": output_scaler}, "scaler.pkl")
 
-# --- Transform train/test sets ---
+# Transform train/test sets
 X_train_scaled = np.array([scaler.transform(x) for x in X_train])
 X_test_scaled  = np.array([scaler.transform(x) for x in X_test])
 y_train_scaled = output_scaler.transform(y_train)
@@ -105,7 +105,7 @@ loss_curve_path = os.path.join("static", "loss_curve.png")
 plt.savefig(loss_curve_path, dpi=200)
 plt.close()
 
-# --- Store summarized metrics ---
+# Save metrics summary to JSON
 metrics_summary = {
     "overall": {"mse": float(mse), "mae": float(mae), "corr": float(overall_corr)},
     "key_features": {

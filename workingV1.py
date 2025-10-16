@@ -91,7 +91,7 @@ def fetch_hour_data(hour, data):
     coords = []
 
     # prepare coordinate list
-    for i, triple in enumerate(data):  # remove [:10] later for full dataset
+    for i, triple in enumerate(data): 
         if not triple or len(triple) != 3:
             results.append({
                 "balloon_index": i,
@@ -149,7 +149,7 @@ for hour in range(24):
 
 
 df = pd.DataFrame(history)
-# --- Derive u/v wind components from speed + direction ---
+# Derive u/v wind components from speed + direction
 if "wind_speed_10m" in df.columns and "wind_direction_10m" in df.columns:
     rad = np.deg2rad(df["wind_direction_10m"])
     df["wind_u"] = df["wind_speed_10m"] * np.sin(rad)   # +east
@@ -157,12 +157,12 @@ if "wind_speed_10m" in df.columns and "wind_direction_10m" in df.columns:
 
 df = df.sort_values(["balloon_index", "hour"])
 
-# --- Replace out of range values with NaN ---
+# Replace out of range values with NaN
 df.loc[~df["latitude"].between(-90, 90), "latitude"] = np.nan
 df.loc[~df["longitude"].between(-180, 180), "longitude"] = np.nan
 df.loc[~df["altitude"].between(0, 50), "altitude"] = np.nan
 
-# --- Handle extreme jumps ---
+# Handle extreme jumps
 df["lat_diff"] = df.groupby("balloon_index")["latitude"].diff().abs()
 df["lon_diff"] = df.groupby("balloon_index")["longitude"].diff().abs()
 df["alt_diff"] = df.groupby("balloon_index")["altitude"].diff().abs()
@@ -174,7 +174,7 @@ df.loc[df["lat_diff"] > LAT_LON_THRESHOLD, "latitude"] = np.nan
 df.loc[df["lon_diff"] > LAT_LON_THRESHOLD, "longitude"] = np.nan
 df.loc[df["alt_diff"] > ALT_THRESHOLD, "altitude"] = np.nan
 
-# --- Interpolate missing data ---
+# Interpolate missing data
 for col in ["latitude", "longitude", "altitude","temperature_2m", "relative_humidity_2m", "wind_speed_10m", "wind_direction_10m", "cloud_cover", "pressure_msl", "wind_u", "wind_v"]:
     if col in df.columns:
         df[col] = (
@@ -186,19 +186,7 @@ for col in ["latitude", "longitude", "altitude","temperature_2m", "relative_humi
 # Save a copy before pivoting
 flight_df = df.copy()
 
-# --- Plot sample balloon trajectories ---
-#plt.figure(figsize=(10,6))
-#for b in flight_df["balloon_index"].unique()[:20]:  # plot a few random balloons
-    #subset = flight_df[flight_df["balloon_index"] == b]
-    #plt.plot(subset["longitude"], subset["latitude"], alpha=0.6, label=f"Balloon {b}")
-
-#plt.xlabel("Longitude")
-#plt.ylabel("Latitude")
-#plt.title("Sample Balloon Trajectories (24h)")
-#plt.legend()
-#plt.show()
-
-# --- Pivot table 
+# Pivot table 
 pivot_cols = [
     "latitude", "longitude", "altitude",
     "temperature_2m", "relative_humidity_2m",

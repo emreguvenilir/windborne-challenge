@@ -29,30 +29,30 @@ def build_snapshot():
 
     df = pd.read_csv(CSV_FILE)
 
-    # --- Prepare input ---
+    # Prepare input
     data = df[feature_cols].values.reshape(len(df), 24, 11)
     X_pred = data[:, -10:, :]
     X_pred_scaled = np.array([input_scaler.transform(x) for x in X_pred])
 
-    # --- Predict next-hour delta for lat/lon/alt ---
+    # Predict next-hour delta for lat/lon/alt
     preds_scaled = model.predict(X_pred_scaled, verbose=0)
     deltas = output_scaler.inverse_transform(preds_scaled)  # Δlat, Δlon, Δalt
 
-    # --- Get last known actual coordinates (hour 23) ---
+    # Get last known actual coordinates (hour 23)
     last_lat = df["latitude_h23"].values
     last_lon = df["longitude_h23"].values
     last_alt = df["altitude_h23"].values
 
-    # --- Compute predicted next-hour positions ---
+    # Compute predicted next-hour positions
     pred_lat = last_lat + deltas[:, 0]
     pred_lon = last_lon + deltas[:, 1]
     pred_alt = np.clip(last_alt + deltas[:, 2], 0, None)  # alt >= 0
 
-    # --- Keep coordinates within bounds ---
+    # Keep coordinates within bounds
     pred_lat = np.clip(pred_lat, -90, 90)
     pred_lon = np.clip(pred_lon, -180, 180)
 
-    # --- Store predictions ---
+    # Store predictions in dataframe
     df["pred_latitude"] = pred_lat
     df["pred_longitude"] = pred_lon
     df["pred_altitude"] = pred_alt

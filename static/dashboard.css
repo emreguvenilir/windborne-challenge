@@ -42,12 +42,12 @@ h1 {
 
 
 .leaflet-container {
-  background: #0f172a; /* fallback background */
+  background: #0f172a; 
 }
 
 #balloon-info i {
   color: #00bfff;
-  font-size: 1.05rem;   /* slightly larger (default is ~0.9rem) */
+  font-size: 1.05rem;   
   margin-right: 8px;
 }
 #balloon-info h3 {

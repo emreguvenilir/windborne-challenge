@@ -8,7 +8,7 @@ let markers = {};
 let activePrediction = null;
 let balloonData = [];
 
-// --- Fetch balloon data ---
+// Fetch balloon data
 async function fetchBalloons() {
   const res = await fetch('/api/balloons');
   balloonData = await res.json();
@@ -36,7 +36,7 @@ async function fetchBalloons() {
   console.log(`Loaded ${balloonData.length} balloons`);
 }
 
-// --- Show balloon details and predicted path on click ---
+// Show balloon details and predicted path
 function showPrediction(b) {
   showBalloonDetails(b);
 
@@ -66,7 +66,7 @@ function showPrediction(b) {
   }
 }
 
-// --- Balloon info sidebar ---
+// Show balloon details and predicted path
 function showBalloonDetails(b) {
   const info = document.getElementById('balloon-info');
 
@@ -103,7 +103,7 @@ info.innerHTML = `
 `;
 }
 
-// --- Fetch model metrics ---
+// Fetch model metrics
 async function fetchModelMetrics() {
   try {
     const res = await fetch('/api/model_metrics');
@@ -139,7 +139,7 @@ async function fetchModelMetrics() {
   }
 }
 
-// --- Initial fetches ---
+// Initial fetches
 fetchBalloons();
 fetchModelMetrics();
 
