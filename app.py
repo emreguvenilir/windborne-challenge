@@ -6,8 +6,14 @@ import numpy as np
 from keras.models import load_model
 import joblib
 import requests
+import logging
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 DATA_FILE = "current_balloon_data.json"
 CSV_FILE = "processed_balloon_data.csv"
@@ -16,6 +22,7 @@ SCALER_FILE = "scaler.pkl"
 METRICS_FILE = "model_metrics.json"
 WINDBORNE_URL = "https://a.windbornesystems.com/treasure/"
 
+# Load model and scalers
 model = load_model(MODEL_FILE, compile=False)
 scaler_obj = joblib.load(SCALER_FILE)
 input_scaler = scaler_obj["scaler"]
@@ -86,10 +93,10 @@ def update_positions_from_windborne():
     using latest Windborne JSONs. Keeps weather data untouched.
     """
     if not os.path.exists(CSV_FILE):
-        print("⚠️ processed_balloon_data.csv missing; skipping position update.")
+        logger.warning("processed_balloon_data.csv missing; skipping position update.")
         return
 
-    print("🔄 Fetching latest Windborne position data...")
+    logger.info("🔄 Fetching latest Windborne position data...")
     # Load existing dataset
     df = pd.read_csv(CSV_FILE)
 
@@ -108,7 +115,7 @@ def update_positions_from_windborne():
                 # Store latest seen position per balloon
                 latest_positions.setdefault(i, {})[hour] = (lat, lon, alt)
         except Exception as e:
-            print(f"⚠️ Failed to fetch hour {hour:02d}: {e}")
+            logger.warning(f"Failed to fetch hour {hour:02d}: {e}")
             continue
 
     # Overwrite only latitude/longitude/altitude columns
@@ -127,8 +134,83 @@ def update_positions_from_windborne():
                     df.at[idx, alt_col] = alt
 
     df.to_csv(CSV_FILE, index=False)
+    logger.info("✅ Positions updated")
 
-# ---------------- ROUTES ----------------
+# ==================== SCHEDULED BACKGROUND TASK ====================
+
+def full_data_update():
+    """
+    Runs every 8 hours: fetch weather + retrain model
+    Runs in background thread - doesn't interrupt users
+    """
+    logger.info("=" * 60)
+    logger.info("🔄 Starting scheduled full update...")
+    logger.info("=" * 60)
+    
+    try:
+        # Step 1: Fetch balloon + weather data
+        logger.info("Step 1/2: Fetching data (workingV1.py)...")
+        start_time = time.time()
+        exit_code = os.system("python workingV1.py")
+        
+        if exit_code != 0:
+            logger.error(f"❌ workingV1.py failed with exit code {exit_code}")
+            return
+        
+        logger.info(f"✅ Data fetched in {time.time() - start_time:.1f}s")
+        
+        # Step 2: Retrain model
+        logger.info("Step 2/2: Retraining model (model1.py)...")
+        start_time = time.time()
+        exit_code = os.system("python model1.py")
+        
+        if exit_code != 0:
+            logger.error(f"❌ model1.py failed with exit code {exit_code}")
+            return
+        
+        logger.info(f"✅ Model retrained in {time.time() - start_time:.1f}s")
+        
+        # Step 3: Reload model in memory
+        logger.info("Step 3/3: Reloading model into memory...")
+        global model, scaler_obj, input_scaler, output_scaler, feature_cols
+        model = load_model(MODEL_FILE, compile=False)
+        scaler_obj = joblib.load(SCALER_FILE)
+        input_scaler = scaler_obj["scaler"]
+        output_scaler = scaler_obj["output_scaler"]
+        feature_cols = scaler_obj["features"]
+        
+        logger.info("✅ Model reloaded")
+        logger.info("=" * 60)
+        logger.info("🎉 FULL UPDATE COMPLETE!")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"❌ Full update failed: {e}", exc_info=True)
+
+# Setup scheduler
+scheduler = BackgroundScheduler()
+
+# Schedule full update every 8 hours
+scheduler.add_job(
+    func=full_data_update,
+    trigger='interval',
+    hours=12,
+    id='full_update',
+    name='Full data + model update',
+    replace_existing=True
+)
+
+# Start scheduler when Flask starts (only once)
+@app.before_request
+def start_scheduler():
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("=" * 60)
+        logger.info("📅 Background scheduler started")
+        logger.info("Schedule: Full update every 12 hours")
+        logger.info("=" * 60)
+
+# ==================== ROUTES ====================
 
 @app.route("/")
 def dashboard():
@@ -136,12 +218,12 @@ def dashboard():
 
 @app.route("/api/balloons")
 def get_balloons():
-    """Serve latest balloon snapshot, refreshing positions from Windborne if stale"""
+    """Serve latest balloon snapshot, refreshing positions from Windborne"""
     try:
         # Always refresh positions before building snapshot
         update_positions_from_windborne()
     except Exception as e:
-        print(f"⚠️ Position update failed: {e}")
+        logger.error(f"Position update failed: {e}")
 
     build_snapshot()
 
@@ -154,32 +236,31 @@ def get_model_metrics():
     """Serve model performance metrics"""
     if not os.path.exists(METRICS_FILE):
         return jsonify({"error": "model_metrics.json not found"}), 404
+    
     with open(METRICS_FILE) as f:
         metrics = json.load(f)
+    
     # Add last modified time for "Last Updated" field
-    metrics["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(METRICS_FILE)))
+    metrics["last_updated"] = time.strftime(
+        "%Y-%m-%d %H:%M:%S", 
+        time.localtime(os.path.getmtime(METRICS_FILE))
+    )
     return jsonify(metrics)
 
-#reload FULL data for processed_balloon_data.csv
-@app.route("/api/update_data", methods=["POST"])
-def update_data():
-    """Rebuild processed_balloon_data.csv by calling workingV1.py"""
-    try:
-        os.system("python3 workingV1.py")
-        return jsonify({"status": "success", "message": "Data updated"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-#retrain model by calling model1.py, only when processed_balloon_data.csv is updated
-@app.route("/api/retrain_model", methods=["POST"])
-def retrain_model():
-    """Retrain LSTM model using the latest processed data"""
-    try:
-        os.system("python3 model1.py")
-        build_snapshot()
-        return jsonify({"status": "success", "message": "Model retrained and snapshot rebuilt"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
+@app.route("/api/health")
+def health():
+    """Health check endpoint - monitor scheduler status"""
+    next_run = scheduler.get_job('full_update').next_run_time if scheduler.get_job('full_update') else None
+    
+    return jsonify({
+        "status": "healthy",
+        "scheduler_running": scheduler.running,
+        "next_full_update": next_run.isoformat() if next_run else None,
+        "last_csv_update": time.strftime(
+            "%Y-%m-%d %H:%M:%S",
+            time.localtime(os.path.getmtime(CSV_FILE))
+        ) if os.path.exists(CSV_FILE) else None
+    })
 
 if __name__ == "__main__":
     app.run(debug=True)
