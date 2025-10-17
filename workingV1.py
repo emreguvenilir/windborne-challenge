@@ -6,6 +6,7 @@ import openmeteo_requests
 import requests_cache
 from retry_requests import retry
 import requests
+import time
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("cache", exist_ok=True)
@@ -99,6 +100,9 @@ def get_weather_batch(coords_list, hour):
     for batch_start in range(0, len(uncached_coords), BATCH_SIZE):
         batch = uncached_coords[batch_start:batch_start + BATCH_SIZE]
         
+        if batch_start > 0:
+            time.sleep(0.5)  # Rate limiting
+
         # Prepare batch request
         lats = [coord[0] for coord in batch]
         lons = [coord[1] for coord in batch]
