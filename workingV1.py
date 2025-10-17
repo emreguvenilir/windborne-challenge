@@ -8,6 +8,14 @@ from retry_requests import retry
 import requests
 import time
 
+cache_session = requests_cache.CachedSession(
+    "cache/openmeteo_cache",
+    backend="sqlite",
+    expire_after=3600  # 1 hour cache TTL
+)
+retry_session = retry(cache_session, retries=3, backoff_factor=0.1)
+openmeteo = openmeteo_requests.Client(session=retry_session)
+
 os.makedirs("data", exist_ok=True)
 os.makedirs("cache", exist_ok=True)
 
@@ -101,7 +109,7 @@ def get_weather_batch(coords_list, hour):
         batch = uncached_coords[batch_start:batch_start + BATCH_SIZE]
         
         if batch_start > 0:
-            time.sleep(0.5)  # Rate limiting
+            time.sleep(3)  # Rate limiting
 
         # Prepare batch request
         lats = [coord[0] for coord in batch]
