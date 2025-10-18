@@ -95,6 +95,7 @@ def get_weather_batch(coords_list, hour):
     
     # If everything was cached, return
     if not uncached_coords:
+        print(f"All {len(coords_list)} balloons weather data from cache.")
         return results
     
     # Batch fetch uncached coordinates
@@ -109,12 +110,14 @@ def get_weather_batch(coords_list, hour):
         batch = uncached_coords[batch_start:batch_start + BATCH_SIZE]
         
         if batch_start > 0:
-            time.sleep(3)  # Rate limiting
+            time.sleep(4)  # Rate limiting
 
         # Prepare batch request
         lats = [coord[0] for coord in batch]
         lons = [coord[1] for coord in batch]
         
+        print(f"Fetching weather for batch {batch_start // BATCH_SIZE + 1} with {len(batch)} locations...")
+
         api_call_count += 1
         
         try:
@@ -123,11 +126,14 @@ def get_weather_batch(coords_list, hour):
                 "latitude": lats,  
                 "longitude": lons, 
                 "past_days": 1,
+                "forecast_days": 0,
                 "hourly": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl",
                 "timezone": "UTC"
             }
             
             responses = openmeteo.weather_api(url, params=params)
+
+            print(f"✅ Batch API call successful for {len(batch)} locations.")
             
             # Process each location in the batch
             for i, response in enumerate(responses):
@@ -163,6 +169,7 @@ def get_weather_batch(coords_list, hour):
 
 def process_hour(hour, data):
     """Process all balloons for one hour using batch API"""
+    print(f"Processing hour {hour:02d}...")
     results = []
     coords = []
     
@@ -199,6 +206,8 @@ def process_hour(hour, data):
             "cloud_cover": weather.get("cloud_cover", np.nan),
             "pressure_msl": weather.get("pressure_msl", np.nan)
         })
+    with_weather = sum(1 for r in results if not np.isnan(r.get("temperature_2m", np.nan)))
+    print(f"Hour {hour:02d} processed: {with_weather}/{len(results)} balloons with weather data.")
     
     return results
 

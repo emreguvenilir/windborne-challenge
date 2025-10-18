@@ -97,7 +97,7 @@ history = model.fit(
     batch_size=32,
     validation_data=(X_test_scaled, y_test_scaled),
     callbacks=callbacks,
-    verbose=0
+    verbose=1
 )
 
 # Save final model
