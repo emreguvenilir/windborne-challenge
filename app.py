@@ -22,6 +22,13 @@ SCALER_FILE = "scaler.pkl"
 METRICS_FILE = "model_metrics.json"
 WINDBORNE_URL = "https://a.windbornesystems.com/treasure/"
 
+# Run initial data fetch and model training if files don't exist
+if not os.path.exists(CSV_FILE):
+    logger.info("First run detected - fetching data and training model...")
+    os.system("python workingV1.py")
+    os.system("python model1.py")
+    logger.info("Initial setup complete!")
+
 # Load model and scalers
 model = load_model(MODEL_FILE, compile=False)
 scaler_obj = joblib.load(SCALER_FILE)
