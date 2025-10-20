@@ -102,7 +102,7 @@ history = model.fit(
 )
 
 # Save final model
-model.save("model.keras")
+model.save("model.h5")
 
 # Evaluation
 predictions_scaled = model.predict(X_test_scaled, verbose=0)

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 DATA_FILE = "current_balloon_data.json"
 CSV_FILE = "processed_balloon_data.csv"
-MODEL_FILE = "model.keras"
+MODEL_FILE = "model.h5"
 SCALER_FILE = "scaler.pkl"
 METRICS_FILE = "model_metrics.json"
 WINDBORNE_URL = "https://a.windbornesystems.com/treasure/" 
