@@ -35,6 +35,7 @@ sequence_length = 10
 def create_sequences(data):
     X, y = [], []
     for sample in data:
+        sample = sample[::-1]
         for i in range(hours - sequence_length):
             X.append(sample[i:i+sequence_length])
             y.append(sample[i+sequence_length][:3] - sample[i+sequence_length-1][:3]) #Prediction displacement

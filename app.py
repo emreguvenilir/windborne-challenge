@@ -21,13 +21,19 @@ MODEL_FILE = "model.keras"
 SCALER_FILE = "scaler.pkl"
 METRICS_FILE = "model_metrics.json"
 WINDBORNE_URL = "https://a.windbornesystems.com/treasure/"
+updating = False
 
-# Run initial data fetch and model training if files don't exist
 if not os.path.exists(CSV_FILE):
-    logger.info("First run detected - fetching data and training model...")
-    os.system("python workingV1.py")
+    logger.info("CSV not found - fetching data...")
+    os.system("python pipeline.py")
+    logger.info("Data fetch complete!")
+
+if not os.path.exists(MODEL_FILE):
+    logger.info("Model not found - training from CSV...")
     os.system("python model1.py")
-    logger.info("Initial setup complete!")
+    logger.info("Model training complete!")
+else:
+    logger.info("Loading existing model...")
 
 # Load model and scalers
 model = load_model(MODEL_FILE, compile=False)
@@ -45,17 +51,17 @@ def build_snapshot():
 
     # Prepare input
     data = df[feature_cols].values.reshape(len(df), 24, 11)
-    X_pred = data[:, -10:, :]
+    X_pred = data[:, :10, :][:, ::-1, :]
     X_pred_scaled = np.array([input_scaler.transform(x) for x in X_pred])
 
     # Predict next-hour delta for lat/lon/alt
     preds_scaled = model.predict(X_pred_scaled, verbose=0)
     deltas = output_scaler.inverse_transform(preds_scaled)  # Δlat, Δlon, Δalt
 
-    # Get last known actual coordinates (hour 23)
-    last_lat = df["latitude_h23"].values
-    last_lon = df["longitude_h23"].values
-    last_alt = df["altitude_h23"].values
+    # Get last known actual coordinates (hour 0)
+    last_lat = df["latitude_h0"].values
+    last_lon = df["longitude_h0"].values
+    last_alt = df["altitude_h0"].values
 
     # Compute predicted next-hour positions
     pred_lat = last_lat + deltas[:, 0]
@@ -150,18 +156,20 @@ def full_data_update():
     Runs every 8 hours: fetch weather + retrain model
     Runs in background thread - doesn't interrupt users
     """
+    global updating
+    updating = True
     logger.info("=" * 60)
     logger.info("🔄 Starting scheduled full update...")
     logger.info("=" * 60)
     
     try:
         # Step 1: Fetch balloon + weather data
-        logger.info("Step 1/2: Fetching data (workingV1.py)...")
+        logger.info("Step 1/2: Fetching data (pipeline.py)...")
         start_time = time.time()
-        exit_code = os.system("python workingV1.py")
+        exit_code = os.system("python pipeline.py")
         
         if exit_code != 0:
-            logger.error(f"❌ workingV1.py failed with exit code {exit_code}")
+            logger.error(f"❌ pipeline.py failed with exit code {exit_code}")
             return
         
         logger.info(f"✅ Data fetched in {time.time() - start_time:.1f}s")
@@ -190,9 +198,10 @@ def full_data_update():
         logger.info("=" * 60)
         logger.info("🎉 FULL UPDATE COMPLETE!")
         logger.info("=" * 60)
-        
     except Exception as e:
         logger.error(f"❌ Full update failed: {e}", exc_info=True)
+    finally:
+        updating = False
 
 # Setup scheduler
 scheduler = BackgroundScheduler()
@@ -201,21 +210,11 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=full_data_update,
     trigger='interval',
-    hours=12,
+    hours=24,
     id='full_update',
     name='Full data + model update',
     replace_existing=True
 )
-
-# Start scheduler when Flask starts (only once)
-@app.before_request
-def start_scheduler():
-    if not scheduler.running:
-        scheduler.start()
-        logger.info("=" * 60)
-        logger.info("📅 Background scheduler started")
-        logger.info("Schedule: Full update every 12 hours")
-        logger.info("=" * 60)
 
 # ==================== ROUTES ====================
 
@@ -225,18 +224,24 @@ def dashboard():
 
 @app.route("/api/balloons")
 def get_balloons():
-    """Serve latest balloon snapshot, refreshing positions from Windborne"""
+    global updating
+    # If updating, return stale cached data (don't rebuild)
+    if updating:
+        if os.path.exists(DATA_FILE):
+            logger.info("Serving cached data during update")
+            with open(DATA_FILE) as f:
+                return jsonify(json.load(f))
+    
+    # Normal path when not updating
     try:
-        # Always refresh positions before building snapshot
         update_positions_from_windborne()
+        build_snapshot()
+        with open(DATA_FILE) as f:
+            data = json.load(f)
+        return jsonify(data)
     except Exception as e:
-        logger.error(f"Position update failed: {e}")
-
-    build_snapshot()
-
-    with open(DATA_FILE) as f:
-        data = json.load(f)
-    return jsonify(data)
+        logger.error(f"Failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/model_metrics")
 def get_model_metrics():
@@ -270,5 +275,7 @@ def health():
     })
 
 if __name__ == "__main__":
+    scheduler.start()
+    logger.info("Scheduler started")
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
