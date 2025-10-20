@@ -23,12 +23,13 @@
         </div>
         <div id="project-info" style="font-size: 0.8rem;">
             <h3><i class="fa-solid fa-info-circle"></i> About This Project</h3>
-            <p>This dashboard visualizes real-time data from weather balloons, integrating meteorological data with a LSTM machine learning model to predict balloon positions for the next hour. The balloon data updates every 5 minutes, while weather feeds update less frequently.</p>
+            <p>This dashboard visualizes real-time balloon position data from the WindBorne Systems API, integrating meteorological data using an LSTM machine learning model to predict where each balloon will be in the next hour. Balloon positions update every 5 minutes, while weather data updates on a scheduled update due to API rate limits.</p>
             <p>Data Sources:</p>
             <ul>
-            <li>Balloon Data: WindBorne API</li>
+            <li>Balloon Data: WindBorne Systems API</li>
             <li>Weather Data: Open-Meteo API</li>
             </ul>
+            <p>Note: Weather data shown is from the most recent model training cycle and may not reflect current conditions</p>
         </div>
     </div>
 

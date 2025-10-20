@@ -1,0 +1,37 @@
+name: Update Weather & Model
+
+on:
+  schedule:
+    - cron: '0 3 */2 * *'  # Every 2 days at 3AM UTC
+  workflow_dispatch:  # Manual trigger button ← Use this to run it tonight!
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 2 hours max
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12.5'
+    
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Run pipeline (fetch weather data)
+      run: python pipeline.py
+    
+    - name: Train model
+      run: python model1.py
+    
+    - name: Commit and push updates
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        git add processed_balloon_data.csv model.keras scaler.pkl model_metrics.json static/loss_curve.png
+        git diff --staged --quiet || git commit -m "🤖 Auto-update: $(date -u +'%Y-%m-%d %H:%M UTC')"
+        git push
