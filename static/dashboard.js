@@ -130,8 +130,8 @@ async function fetchModelMetrics() {
     $('#alt-mae').text(safe(key.altitude?.mae));
     $('#alt-corr').text(safe(key.altitude?.corr));
 
-    if (data.loss_curve_path) {
-      $('#loss-curve-img').attr('src', data.loss_curve_path + '?t=' + Date.now());
+    if (data.visualizations) {
+      $('#loss-curve-img').attr('src', data.visualizations.loss_curve+ '?t=' + Date.now());
     }
   } catch (err) {
     console.error(err);

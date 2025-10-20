@@ -20,7 +20,8 @@ CSV_FILE = "processed_balloon_data.csv"
 MODEL_FILE = "model.keras"
 SCALER_FILE = "scaler.pkl"
 METRICS_FILE = "model_metrics.json"
-WINDBORNE_URL = "https://a.windbornesystems.com/treasure/"
+WINDBORNE_URL = "https://a.windbornesystems.com/treasure/" 
+LOSS_CURVE = "loss_curve.png"
 updating = False
 
 if not os.path.exists(CSV_FILE):
