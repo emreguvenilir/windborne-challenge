@@ -7,7 +7,6 @@ from keras.models import load_model
 import joblib
 import requests
 import logging
-from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 
@@ -24,17 +23,7 @@ WINDBORNE_URL = "https://a.windbornesystems.com/treasure/"
 LOSS_CURVE = "loss_curve.png"
 updating = False
 
-if not os.path.exists(CSV_FILE):
-    logger.info("CSV not found - fetching data...")
-    os.system("python pipeline.py")
-    logger.info("Data fetch complete!")
-
-if not os.path.exists(MODEL_FILE):
-    logger.info("Model not found - training from CSV...")
-    os.system("python model1.py")
-    logger.info("Model training complete!")
-else:
-    logger.info("Loading existing model...")
+logger.info("Loading model...")
 
 # Load model and scalers
 model = load_model(MODEL_FILE, compile=False)
@@ -150,73 +139,6 @@ def update_positions_from_windborne():
     df.to_csv(CSV_FILE, index=False)
     logger.info("✅ Positions updated")
 
-# ==================== SCHEDULED BACKGROUND TASK ====================
-
-def full_data_update():
-    """
-    Runs every 8 hours: fetch weather + retrain model
-    Runs in background thread - doesn't interrupt users
-    """
-    global updating
-    updating = True
-    logger.info("=" * 60)
-    logger.info("🔄 Starting scheduled full update...")
-    logger.info("=" * 60)
-    
-    try:
-        # Step 1: Fetch balloon + weather data
-        logger.info("Step 1/2: Fetching data (pipeline.py)...")
-        start_time = time.time()
-        exit_code = os.system("python pipeline.py")
-        
-        if exit_code != 0:
-            logger.error(f"❌ pipeline.py failed with exit code {exit_code}")
-            return
-        
-        logger.info(f"✅ Data fetched in {time.time() - start_time:.1f}s")
-        
-        # Step 2: Retrain model
-        logger.info("Step 2/2: Retraining model (model1.py)...")
-        start_time = time.time()
-        exit_code = os.system("python model1.py")
-        
-        if exit_code != 0:
-            logger.error(f"❌ model1.py failed with exit code {exit_code}")
-            return
-        
-        logger.info(f"✅ Model retrained in {time.time() - start_time:.1f}s")
-        
-        # Step 3: Reload model in memory
-        logger.info("Step 3/3: Reloading model into memory...")
-        global model, scaler_obj, input_scaler, output_scaler, feature_cols
-        model = load_model(MODEL_FILE, compile=False)
-        scaler_obj = joblib.load(SCALER_FILE)
-        input_scaler = scaler_obj["scaler"]
-        output_scaler = scaler_obj["output_scaler"]
-        feature_cols = scaler_obj["features"]
-        
-        logger.info("✅ Model reloaded")
-        logger.info("=" * 60)
-        logger.info("🎉 FULL UPDATE COMPLETE!")
-        logger.info("=" * 60)
-    except Exception as e:
-        logger.error(f"❌ Full update failed: {e}", exc_info=True)
-    finally:
-        updating = False
-
-# Setup scheduler
-scheduler = BackgroundScheduler()
-
-# Schedule full update every 8 hours
-scheduler.add_job(
-    func=full_data_update,
-    trigger='interval',
-    hours=24,
-    id='full_update',
-    name='Full data + model update',
-    replace_existing=True
-)
-
 # ==================== ROUTES ====================
 
 @app.route("/")
@@ -262,21 +184,20 @@ def get_model_metrics():
 
 @app.route("/api/health")
 def health():
-    """Health check endpoint - monitor scheduler status"""
-    next_run = scheduler.get_job('full_update').next_run_time if scheduler.get_job('full_update') else None
-    
+    """Health check endpoint"""
     return jsonify({
         "status": "healthy",
-        "scheduler_running": scheduler.running,
-        "next_full_update": next_run.isoformat() if next_run else None,
+        "model_loaded": model is not None,
         "last_csv_update": time.strftime(
             "%Y-%m-%d %H:%M:%S",
             time.localtime(os.path.getmtime(CSV_FILE))
-        ) if os.path.exists(CSV_FILE) else None
+        ) if os.path.exists(CSV_FILE) else None,
+        "last_model_update": time.strftime(
+            "%Y-%m-%d %H:%M:%S",
+            time.localtime(os.path.getmtime(MODEL_FILE))
+        ) if os.path.exists(MODEL_FILE) else None
     })
 
 if __name__ == "__main__":
-    scheduler.start()
-    logger.info("Scheduler started")
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
