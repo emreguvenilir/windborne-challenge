@@ -32,44 +32,49 @@ input_scaler = scaler_obj["scaler"]
 output_scaler = scaler_obj["output_scaler"]
 feature_cols = scaler_obj["features"]
 
-def build_snapshot():
-    """Generate snapshot with next-hour delta predictions"""
+def build_snapshot(batch_size: int = 200):
+    """Generate snapshot with next-hour delta predictions in memory-safe batches."""
     if not os.path.exists(CSV_FILE):
         raise FileNotFoundError("processed_balloon_data.csv missing!")
 
+    logger.info("📦 Building prediction snapshot (batched inference)...")
     df = pd.read_csv(CSV_FILE)
 
-    # Prepare input
-    data = df[feature_cols].values.reshape(len(df), 24, 11)
-    X_pred = data[:, :10, :][:, ::-1, :]
-    X_pred_scaled = np.array([input_scaler.transform(x) for x in X_pred])
+    n = len(df)
+    preds_all = []
 
-    # Predict next-hour delta for lat/lon/alt
-    preds_scaled = model.predict(X_pred_scaled, verbose=0)
-    deltas = output_scaler.inverse_transform(preds_scaled)  # Δlat, Δlon, Δalt
+    # Process in chunks to avoid OOM
+    for start in range(0, n, batch_size):
+        end = min(start + batch_size, n)
+        batch = df.iloc[start:end]
 
-    # Get last known actual coordinates (hour 0)
+        data = batch[feature_cols].values.reshape(len(batch), 24, 11)
+        X_pred = data[:, :10, :][:, ::-1, :]
+
+        # scale inputs
+        X_pred_scaled = np.array([input_scaler.transform(x) for x in X_pred])
+
+        # predict deltas
+        preds_scaled = model.predict(X_pred_scaled, verbose=0)
+        preds_all.append(output_scaler.inverse_transform(preds_scaled))
+
+        logger.info(f"  → processed {end}/{n} rows")
+
+    # Concatenate all predictions
+    deltas = np.vstack(preds_all)
+
+    # Compute next-hour positions
     last_lat = df["latitude_h0"].values
     last_lon = df["longitude_h0"].values
     last_alt = df["altitude_h0"].values
 
-    # Compute predicted next-hour positions
-    pred_lat = last_lat + deltas[:, 0]
-    pred_lon = last_lon + deltas[:, 1]
-    pred_alt = np.clip(last_alt + deltas[:, 2], 0, None)  # alt >= 0
+    df["pred_latitude"]  = np.clip(last_lat + deltas[:, 0], -90, 90)
+    df["pred_longitude"] = np.clip(last_lon + deltas[:, 1], -180, 180)
+    df["pred_altitude"]  = np.clip(last_alt + deltas[:, 2], 0, None)
 
-    # Keep coordinates within bounds
-    pred_lat = np.clip(pred_lat, -90, 90)
-    pred_lon = np.clip(pred_lon, -180, 180)
-
-    # Store predictions in dataframe
-    df["pred_latitude"] = pred_lat
-    df["pred_longitude"] = pred_lon
-    df["pred_altitude"] = pred_alt
-
-    snapshot = []
-    for _, row in df.iterrows():
-        snapshot.append({
+    # Build compact snapshot list
+    snapshot = [
+        {
             "balloon_id": int(row["balloon_index"]),
             "latitude": row["latitude_h23"],
             "longitude": row["longitude_h23"],
@@ -85,10 +90,14 @@ def build_snapshot():
             "pressure_msl": row["pressure_msl_h23"],
             "wind_u": row["wind_u_h23"],
             "wind_v": row["wind_v_h23"]
-        })
+        }
+        for _, row in df.iterrows()
+    ]
 
     with open(DATA_FILE, "w") as f:
         json.dump(snapshot, f, indent=2)
+
+    logger.info(f"✅ Snapshot complete — {len(df)} balloons written to {DATA_FILE}")
 
 def update_positions_from_windborne():
     """
