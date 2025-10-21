@@ -76,7 +76,9 @@ def rebuild_predictions():
 
 if __name__ == "__main__":
     logger.info("🚀 Background worker started - rebuilding predictions hourly")
-    
+    rebuild_predictions()
+    logger.info("Initial complete")
+    time.sleep(30)
     last_run_hour = -1
     
     while True:
