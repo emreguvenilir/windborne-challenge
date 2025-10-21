@@ -3,7 +3,7 @@ import json, os, time
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import pandas as pd
 import numpy as np
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 import joblib
 import requests
 import logging
