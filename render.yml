@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: windborne-dashboard
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --timeout 120 --workers 1"
+    plan: starter
+    disk:
+      name: predictions-disk
+      mountPath: /mnt/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12
+
+  - type: cron
+    name: prediction-rebuilder
+    runtime: python
+    schedule: "0 * * * *"  # Every hour at minute 0
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python cron_rebuild.py"
+    plan: starter
+    disk:
+      name: predictions-disk
+      mountPath: /mnt/data
+      sizeGB: 1

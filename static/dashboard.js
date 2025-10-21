@@ -10,30 +10,42 @@ let balloonData = [];
 
 // Fetch balloon data
 async function fetchBalloons() {
-  const res = await fetch('/api/balloons');
-  balloonData = await res.json();
+  try{
+    const res = await fetch('/api/balloons');
+    
+      if (res.status === 503) {
+      console.log("Predictions not ready yet, retrying in 30s...");
+      setTimeout(fetchBalloons, 30000);
+      return;
+    }
+    
+    balloonData = await res.json();
 
-  // Clear previous markers
-  Object.values(markers).forEach(m => map.removeLayer(m));
-  markers = {};
+    // Clear previous markers
+    Object.values(markers).forEach(m => map.removeLayer(m));
+    markers = {};
 
-  balloonData.forEach(b => {
-    if (!b.latitude || !b.longitude) return;
+    balloonData.forEach(b => {
+      if (!b.latitude || !b.longitude) return;
 
-    // Blue icon for current position
-    const balloonIcon = L.divIcon({
-      html: '<i class="fa-solid fa-location-arrow" style="color:#00bfff; font-size:18px;"></i>',
-      className: 'balloon-icon',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
+      // Blue icon for current position
+      const balloonIcon = L.divIcon({
+        html: '<i class="fa-solid fa-location-arrow" style="color:#00bfff; font-size:18px;"></i>',
+        className: 'balloon-icon',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      const marker = L.marker([b.latitude, b.longitude], { icon: balloonIcon }).addTo(map);
+      marker.on('click', () => showPrediction(b));
+      markers[b.balloon_id] = marker;
     });
 
-    const marker = L.marker([b.latitude, b.longitude], { icon: balloonIcon }).addTo(map);
-    marker.on('click', () => showPrediction(b));
-    markers[b.balloon_id] = marker;
-  });
-
-  console.log(`Loaded ${balloonData.length} balloons`);
+    console.log(`Loaded ${balloonData.length} balloons`);
+  }
+  catch (err){
+    console.error('Failed to fetch balloons:', err)
+  }
 }
 
 // Show balloon details and predicted path

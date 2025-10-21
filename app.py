@@ -14,14 +14,13 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DATA_FILE = "current_balloon_data.json"
+# File paths - use persistent disk if available, fallback to local
+DATA_FILE = "/mnt/data/current_balloon_data.json" if os.path.exists("/mnt/data") else "current_balloon_data.json"
 CSV_FILE = "processed_balloon_data.csv"
 MODEL_FILE = "model.h5"
 SCALER_FILE = "scaler.pkl"
 METRICS_FILE = "model_metrics.json"
 WINDBORNE_URL = "https://a.windbornesystems.com/treasure/" 
-LOSS_CURVE = "loss_curve.png"
-updating = False
 
 logger.info("Loading model...")
 
@@ -32,8 +31,59 @@ input_scaler = scaler_obj["scaler"]
 output_scaler = scaler_obj["output_scaler"]
 feature_cols = scaler_obj["features"]
 
-def build_snapshot(batch_size: int = 200):
-    """Generate snapshot with next-hour delta predictions in memory-safe batches."""
+# ==================== FUNCTIONS FOR CRON JOB ====================
+
+def fetch_latest_full_dataset():
+    """Fetch all 24 hours of balloon data - called by cron job"""
+    logger.info("🔄 Fetching full 24-hour dataset from Windborne...")
+    all_data = {}
+    
+    for hour in range(24):
+        url = f"{WINDBORNE_URL}{hour:02d}.json"
+        try:
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            all_data[hour] = data
+            logger.info(f"  ✓ Fetched hour {hour:02d} ({len(data)} balloons)")
+        except Exception as e:
+            logger.warning(f"  ✗ Failed hour {hour:02d}: {e}")
+            all_data[hour] = []
+    
+    return all_data
+
+def update_csv_with_new_positions(all_data):
+    """Update processed_balloon_data.csv with fresh balloon positions"""
+    if not os.path.exists(CSV_FILE):
+        logger.error("CSV file missing!")
+        return False
+    
+    df = pd.read_csv(CSV_FILE)
+    logger.info(f"Updating CSV with {len(df)} balloons...")
+    
+    # Update position columns only
+    for hour in range(24):
+        lat_col = f"latitude_h{hour}"
+        lon_col = f"longitude_h{hour}"
+        alt_col = f"altitude_h{hour}"
+        
+        if hour in all_data:
+            for balloon_id in range(len(df)):
+                if balloon_id < len(all_data[hour]) and all_data[hour][balloon_id]:
+                    try:
+                        lat, lon, alt = map(float, all_data[hour][balloon_id])
+                        df.at[balloon_id, lat_col] = lat
+                        df.at[balloon_id, lon_col] = lon
+                        df.at[balloon_id, alt_col] = alt
+                    except:
+                        continue
+    
+    df.to_csv(CSV_FILE, index=False)
+    logger.info("✅ CSV updated with new positions")
+    return True
+
+def build_predictions_batch(batch_size=200):
+    """Generate predictions with next-hour delta predictions in memory-safe batches"""
     if not os.path.exists(CSV_FILE):
         raise FileNotFoundError("processed_balloon_data.csv missing!")
 
@@ -94,59 +144,8 @@ def build_snapshot(batch_size: int = 200):
         for _, row in df.iterrows()
     ]
 
-    with open(DATA_FILE, "w") as f:
-        json.dump(snapshot, f, indent=2)
-
-    logger.info(f"✅ Snapshot complete — {len(df)} balloons written to {DATA_FILE}")
-
-def update_positions_from_windborne():
-    """
-    Refresh just balloon position data (lat/lon/alt) in processed_balloon_data.csv
-    using latest Windborne JSONs. Keeps weather data untouched.
-    """
-    if not os.path.exists(CSV_FILE):
-        logger.warning("processed_balloon_data.csv missing; skipping position update.")
-        return
-
-    logger.info("🔄 Fetching latest Windborne position data...")
-    # Load existing dataset
-    df = pd.read_csv(CSV_FILE)
-
-    # Fetch latest JSONs (fast)
-    latest_positions = {}
-    for hour in range(24):
-        url = f"{WINDBORNE_URL}{hour:02d}.json"
-        try:
-            r = requests.get(url, timeout=10)
-            r.raise_for_status()
-            data = r.json()
-            for i, triple in enumerate(data):
-                if not triple or len(triple) != 3:
-                    continue
-                lat, lon, alt = map(float, triple)
-                # Store latest seen position per balloon
-                latest_positions.setdefault(i, {})[hour] = (lat, lon, alt)
-        except Exception as e:
-            logger.warning(f"Failed to fetch hour {hour:02d}: {e}")
-            continue
-
-    # Overwrite only latitude/longitude/altitude columns
-    for hour in range(24):
-        lat_col = f"latitude_h{hour}"
-        lon_col = f"longitude_h{hour}"
-        alt_col = f"altitude_h{hour}"
-
-        if lat_col in df.columns and lon_col in df.columns and alt_col in df.columns:
-            for idx in range(len(df)):
-                balloon_id = df.loc[idx, "balloon_index"]
-                if balloon_id in latest_positions and hour in latest_positions[balloon_id]:
-                    lat, lon, alt = latest_positions[balloon_id][hour]
-                    df.at[idx, lat_col] = lat
-                    df.at[idx, lon_col] = lon
-                    df.at[idx, alt_col] = alt
-
-    df.to_csv(CSV_FILE, index=False)
-    logger.info("✅ Positions updated")
+    logger.info(f"✅ Snapshot complete — {len(df)} balloons")
+    return snapshot
 
 # ==================== ROUTES ====================
 
@@ -156,23 +155,20 @@ def dashboard():
 
 @app.route("/api/balloons")
 def get_balloons():
-    global updating
-    # If updating, return stale cached data (don't rebuild)
-    if updating:
-        if os.path.exists(DATA_FILE):
-            logger.info("Serving cached data during update")
-            with open(DATA_FILE) as f:
-                return jsonify(json.load(f))
-    
-    # Normal path when not updating
+    """Serve pre-computed predictions from persistent disk (updated by cron job)"""
     try:
-        update_positions_from_windborne()
-        build_snapshot()
+        if not os.path.exists(DATA_FILE):
+            logger.error(f"{DATA_FILE} not found - waiting for cron job to generate predictions")
+            return jsonify({"error": "Predictions not yet available. Please wait for hourly update."}), 503
+        
         with open(DATA_FILE) as f:
             data = json.load(f)
+        
+        logger.info(f"Served {len(data)} balloons from cache")
         return jsonify(data)
+        
     except Exception as e:
-        logger.error(f"Failed: {e}")
+        logger.error(f"Failed to serve balloons: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/model_metrics")
@@ -197,14 +193,15 @@ def health():
     return jsonify({
         "status": "healthy",
         "model_loaded": model is not None,
+        "predictions_available": os.path.exists(DATA_FILE),
         "last_csv_update": time.strftime(
             "%Y-%m-%d %H:%M:%S",
             time.localtime(os.path.getmtime(CSV_FILE))
         ) if os.path.exists(CSV_FILE) else None,
-        "last_model_update": time.strftime(
+        "last_prediction_update": time.strftime(
             "%Y-%m-%d %H:%M:%S",
-            time.localtime(os.path.getmtime(MODEL_FILE))
-        ) if os.path.exists(MODEL_FILE) else None
+            time.localtime(os.path.getmtime(DATA_FILE))
+        ) if os.path.exists(DATA_FILE) else None
     })
 
 if __name__ == "__main__":

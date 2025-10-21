@@ -28,10 +28,13 @@ jobs:
       - name: Train model
         run: python model1.py
       
+      - name: Generate initial predictions
+        run: python -c "from app import fetch_latest_full_dataset, update_csv_with_new_positions, build_predictions_batch; import json; all_data = fetch_latest_full_dataset(); update_csv_with_new_positions(all_data); preds = build_predictions_batch(); json.dump(preds, open('current_balloon_data.json', 'w'))"
+      
       - name: Commit and push updates
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          git add processed_balloon_data.csv model.keras scaler.pkl model_metrics.json static/loss_curve.png
+          git add processed_balloon_data.csv model.h5 scaler.pkl model_metrics.json static/loss_curve.png current_balloon_data.json
           git diff --staged --quiet || git commit -m "🤖 Auto-update: $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
