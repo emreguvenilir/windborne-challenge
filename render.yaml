@@ -5,6 +5,7 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn app:app --timeout 120 --workers 1"
     plan: starter
+    region: virginia
     disk:
       name: predictions-disk
       mountPath: /mnt/data
@@ -19,10 +20,11 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python cron_rebuild.py"
     plan: starter
+    region: virginia
     disk:
       name: predictions-disk
       mountPath: /mnt/data
-      sizeGB: 1
+      # NO sizeGB - mounts existing disk from web service
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.5"
