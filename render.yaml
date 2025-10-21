@@ -12,11 +12,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12
-
-  - type: cron
-    name: prediction-rebuilder
+  - type: worker
+    name: windborne-worker
     runtime: python
-    schedule: "0 * * * *"  # Every hour at minute 0
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python cron_rebuild.py"
     plan: starter
