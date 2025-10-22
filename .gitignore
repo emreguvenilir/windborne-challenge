@@ -1,0 +1,35 @@
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ===== Virtual Environment =====
+.venv/
+env/
+venv/
+
+# ===== Data & Models =====
+data/
+*.csv
+*.h5
+*.pkl
+*.json
+*.png
+
+# ===== Credentials =====
+.env
+
+# ===== Logs & Checkpoints =====
+*.log
+*.out
+*.err
+*.ckpt
+
+# ===== System Files =====
+.DS_Store
+Thumbs.db
+
+# ===== VSCode / IDE =====
+.vscode/
+.idea/

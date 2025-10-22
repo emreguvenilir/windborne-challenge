@@ -1,0 +1,26 @@
+# ===== Python cache =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ===== Virtual environments =====
+.venv/
+env/
+venv/
+
+# ===== Data and model outputs =====
+data/
+*.csv
+*.h5
+*.pkl
+*.json
+*.png
+
+# ===== Secrets =====
+.env
+
+# ===== IDE / System junk =====
+.vscode/
+.DS_Store
+Thumbs.db

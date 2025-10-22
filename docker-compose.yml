@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: windborne-web
+    command: gunicorn app:app --bind 0.0.0.0:5000 --workers 1 --threads 2 --timeout 120
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.6'
+          memory: 384M        # Reduced - no TensorFlow in web
+        reservations:
+          memory: 128M
+
+  scheduler-update:
+    build: .
+    container_name: windborne-scheduler-update
+    command: python scheduler_update.py
+    env_file:
+      - .env
+    restart: unless-stopped 
+    depends_on:
+      web:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.4"
+          memory: 640M        # Based on your 487 MB test
+        reservations:
+          memory: 64M         # lowered reservation
+
+networks:
+  default:
+    name: windborne-network

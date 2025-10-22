@@ -12,8 +12,16 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import joblib
 import json
+import psutil
+
+# ====== Memory Checks ========
+def log_memory(stage):
+    process = psutil.Process(os.getpid())
+    mem_mb = process.memory_info().rss / (1024 * 1024)
+    print(f"[MEMORY] {stage}: {mem_mb:.2f} MB RSS")
 
 df = pd.read_csv("processed_balloon_data.csv")
+log_memory("After loading CSV")
 features_per_hour = 11
 hours = 24
 
@@ -22,10 +30,12 @@ feature_cols = [c for c in df.columns if c != "balloon_index"]
 data = df[feature_cols].values
 
 X_full = data.reshape(len(df), hours, features_per_hour)
+log_memory("After reshaping into 3D array")
 
 # Split balloons before creating sequences
 balloon_ids = np.arange(len(df))
 train_ids, test_ids = train_test_split(balloon_ids, test_size=0.2, random_state=42)
+log_memory("After train/test split")
 
 X_full_train = X_full[train_ids]
 X_full_test = X_full[test_ids]
@@ -43,6 +53,7 @@ def create_sequences(data):
 
 X_train, y_train = create_sequences(X_full_train)
 X_test, y_test = create_sequences(X_full_test)
+log_memory("After creating sequences")
 
 print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
 
@@ -61,6 +72,7 @@ X_train_scaled = np.array([scaler.transform(x) for x in X_train])
 X_test_scaled  = np.array([scaler.transform(x) for x in X_test])
 y_train_scaled = output_scaler.transform(y_train)
 y_test_scaled  = output_scaler.transform(y_test)
+log_memory("After scaling data")
 
 # Model definition
 model = Sequential([
@@ -74,6 +86,7 @@ model = Sequential([
 ])
 
 model.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
+log_memory("After model compilation")
 
 # Callbacks for early stopping and model checkpointing
 os.makedirs("static", exist_ok=True)
@@ -92,6 +105,7 @@ callbacks = [
     )
 ]
 # Training
+log_memory("Before training")
 history = model.fit(
     X_train_scaled, y_train_scaled,
     epochs=75,
@@ -100,12 +114,13 @@ history = model.fit(
     callbacks=callbacks,
     verbose=1
 )
-
+log_memory("After training")
 # Save final model
 model.save("model.h5")
 
 # Evaluation
 predictions_scaled = model.predict(X_test_scaled, verbose=0)
+log_memory("After prediction step")
 predictions_inv = output_scaler.inverse_transform(predictions_scaled)
 y_test_inv = output_scaler.inverse_transform(y_test_scaled)
 
@@ -158,3 +173,20 @@ metrics_summary = {
 }
 with open("model_metrics.json", "w") as f:
     json.dump(metrics_summary, f, indent=2)
+
+print(f"Overall MSE: {mse:.4f}, MAE: {mae:.4f}, Corr: {overall_corr:.4f}")
+print(f"Files saved: model.h5, scaler.pkl, model_metrics.json, static/loss_curve.png")
+
+# ============= Upload to R2 (Optional - scheduler handles this) =============
+# Uncomment if you want model1.py to upload independently
+try:
+    from utils.r2_helper import upload_file
+    print("Uploading model files to R2...")
+    upload_file('model.h5', 'model.h5')
+    upload_file('scaler.pkl', 'scaler.pkl')
+    upload_file('model_metrics.json', 'model_metrics.json')
+    upload_file('static/loss_curve.png', 'static/loss_curve.png')
+except Exception as e:
+    print(f"Failed to upload to R2: {e}")
+
+log_memory("Before exit")

@@ -12,6 +12,14 @@ import time
 from threading import Lock
 import requests
 import logging
+import psutil
+
+# ============= Memory Checks =============
+
+def log_memory_usage(stage):
+    process = psutil.Process(os.getpid())
+    mem_mb = process.memory_info().rss / (1024 * 1024)
+    logger.info(f"[MEMORY] {stage}: {mem_mb:.2f} MB RSS")
 
 # ============= Declarations and Setup ============= 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -117,6 +125,8 @@ def fetch_weather_batch(grid_keys, hour):
     if not grid_keys:
         return {}
     
+    log_memory_usage(f"[fetch_weather_batch start] hour={hour}, batch_size={len(grid_keys)}")
+
     # Step 1: Check cache first, separate uncached locations
     results = {}
     needs_fetch = []  # (lat, lon, grid_key) tuples
@@ -230,6 +240,8 @@ def fetch_weather_batch(grid_keys, hour):
         
         if api_call_count % 100 == 0:
             logger.info(f"API calls: {api_call_count} | Cache hits: {cache_hits} | Misses: {cache_misses}")
+
+        log_memory_usage(f"[fetch_weather_batch end] hour={hour}, processed={len(needs_fetch)}")
         
     except Exception as e:
         logger.error(f"Batch weather fetch failed for hour {hour}: {e}")
@@ -253,6 +265,8 @@ logger.info("Starting balloon weather data pipeline")
 logger.info(f"Keyframe hours: {KEYFRAME_HOURS}")
 logger.info(f"Batch size: {BATCH_SIZE} balloons")
 logger.info("="*60)
+
+log_memory_usage("Startup")
 
 logger.info("Starting balloon data download")
 
@@ -281,7 +295,7 @@ for hour in range(24):
                 with open(output_path, "w") as f:
                     f.write("[]")
                 break
-               
+log_memory_usage("After all downloads")        
 # ============= Load and Process Balloon Data =============
 
 logger.info("Processing all 24 hours of balloon data")
@@ -345,6 +359,7 @@ for hour in range(24):
         for batch in batches:
             batch_results = fetch_weather_batch(batch, hour)
             weather_by_grid.update(batch_results)
+            log_memory_usage(f"After weather fetch batch (hour {hour:02d}, size {len(batch)})")
         
         # === Map weather back to all balloons (preserving original coords) ===
         for grid_key, balloon_list in grid_groups.items():
@@ -391,12 +406,14 @@ for hour in range(24):
                 "cloud_cover": np.nan,
                 "pressure_msl": np.nan
             })
+    log_memory_usage(f"After processing hour {hour:02d}")    
 
 logger.info(f"Data collection complete. Total records: {len(history)}")
 
 # ============= Conversion to DF, Handle Missing Data, and Pivoting =============
 
 df = pd.DataFrame(history)
+log_memory_usage("After creating DataFrame from history")
 df = df.sort_values(["balloon_index", "hour"])
 
 logger.info(f"Starting processing with {len(df)} balloon records")
@@ -446,7 +463,7 @@ df[weather_cols] = (
     df.groupby("balloon_index")[weather_cols]
       .transform(lambda g: g.ffill().bfill())
 )
-
+log_memory_usage("After weather interpolation steps")
 # ============= INTERPOLATE POSITION DATA =============
 
 # Interpolate position columns (linear within each balloon)
@@ -460,7 +477,7 @@ df[pos_cols] = (
     df.groupby("balloon_index")[pos_cols]
       .transform(lambda g: g.ffill().bfill())
 )
-
+log_memory_usage("After all interpolation steps")
 # Reconstruct wind speed/direction from interpolated u/v
 df["wind_speed_10m"] = np.sqrt(df["wind_u"]**2 + df["wind_v"]**2)
 df["wind_direction_10m"] = np.rad2deg(np.arctan2(df["wind_u"], df["wind_v"])) % 360
@@ -499,4 +516,15 @@ df.reset_index(inplace=True)
 output_path = "processed_balloon_data.csv"
 df.to_csv(output_path, index=False)
 
+log_memory_usage("After saving CSV")
+
 logger.info(f"Processing complete. Total balloons: {len(df)}")
+
+# ============= Upload to R2 (Optional - scheduler handles this) =============
+# Uncomment if you want pipeline.py to upload independently
+try:
+    from utils.r2_helper import upload_file
+    logger.info("Uploading processed CSV to R2...")
+    upload_file(output_path, output_path)
+except Exception as e:
+    logger.error(f"Failed to upload to R2: {e}")
