@@ -96,20 +96,20 @@ def build_predictions_batch(batch_size=200):
     snapshot = [
         {
             "balloon_id": int(row["balloon_index"]),
-            "latitude": row["latitude_h23"],
-            "longitude": row["longitude_h23"],
-            "altitude": row["altitude_h23"],
+            "latitude": row["latitude_h0"],
+            "longitude": row["longitude_h0"],
+            "altitude": row["altitude_h0"],
             "pred_latitude": row["pred_latitude"],
             "pred_longitude": row["pred_longitude"],
             "pred_altitude": row["pred_altitude"],
-            "temperature_2m": row["temperature_2m_h23"],
-            "relative_humidity_2m": row["relative_humidity_2m_h23"],
-            "wind_speed_10m": row["wind_speed_10m_h23"],
-            "wind_direction_10m": row["wind_direction_10m_h23"],
-            "cloud_cover": row["cloud_cover_h23"],
-            "pressure_msl": row["pressure_msl_h23"],
-            "wind_u": row["wind_u_h23"],
-            "wind_v": row["wind_v_h23"]
+            "temperature_2m": row["temperature_2m_h0"],
+            "relative_humidity_2m": row["relative_humidity_2m_h0"],
+            "wind_speed_10m": row["wind_speed_10m_h0"],
+            "wind_direction_10m": row["wind_direction_10m_h0"],
+            "cloud_cover": row["cloud_cover_h0"],
+            "pressure_msl": row["pressure_msl_h0"],
+            "wind_u": row["wind_u_h0"],
+            "wind_v": row["wind_v_h0"]
         }
         for _, row in df.iterrows()
     ]
