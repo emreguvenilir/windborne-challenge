@@ -24,12 +24,15 @@
         <div id="project-info" style="font-size: 0.8rem;">
             <h3><i class="fa-solid fa-info-circle"></i> About This Project</h3>
             <p>This dashboard visualizes real-time balloon position data from the WindBorne Systems API, integrating meteorological data using an LSTM machine learning model to predict where each balloon will be in the next hour. Balloon positions update every 5 minutes, while weather data updates on a scheduled update due to API rate limits.</p>
+            <h3>Project Build Information</h3>
+            <p>The data pipeline and training was built using python which connects to Cloudflare R2. I built a Keras model using TensorFlow. This project uses a Flask and Gunicorn web service running on a Dockerized DigitialOcean Droplet with limited resources with robust fallback logic. I haven't used Docker before this project, and it pushed the limits of what I thought I was capable of building.</p>
             <p>Data Sources:</p>
             <ul>
             <li>Balloon Data: WindBorne Systems API</li>
             <li>Weather Data: Open-Meteo API</li>
             </ul>
             <p>Note: Weather data shown is from the most recent model training cycle and may not reflect current conditions</p>
+            
         </div>
     </div>
 
