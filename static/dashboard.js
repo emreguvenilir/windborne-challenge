@@ -14,7 +14,7 @@ async function fetchBalloons() {
     const res = await fetch('/api/balloons');
     
       if (res.status === 503) {
-      console.log("Predictions not ready yet, retrying in 30s...");
+      console.log("Predictions not ready, retrying in 30s...");
       setTimeout(fetchBalloons, 30000);
       return;
     }

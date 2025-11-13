@@ -67,7 +67,7 @@ last_call_time = 0
 cache_hits = 0
 cache_misses = 0
 
-# Rate limit tracking
+# Rate limit track
 minute_start = None
 hour_start = None
 calls_this_minute = 0

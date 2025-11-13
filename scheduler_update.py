@@ -55,7 +55,7 @@ def update_predictions():
         from predictor import update_csv_with_new_positions, build_predictions_batch
         
         all_data = fetch_latest_full_dataset()
-        log_memory("After fetching latest dataset")
+        log_memory("After fetching latest dataset!")
 
         update_csv_with_new_positions(all_data)
         

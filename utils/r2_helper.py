@@ -29,7 +29,7 @@ try:
     )
     BUCKET = os.environ["R2_BUCKET_NAME"]
 except KeyError as e:
-    raise RuntimeError(f"Missing required R2 environment variable: {e}")
+    raise RuntimeError(f"Missing required R2 environment variable!: {e}")
 
 # === Core R2 helper functions ===
 

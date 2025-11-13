@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def run_pipeline():
-    """Run full pipeline: data fetch → train model → upload to R2"""
+    """Run full pipelines: data fetch → train model → upload to R2"""
     logger.info("🔄 Starting daily pipeline job")
     
     try:
