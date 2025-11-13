@@ -53,7 +53,7 @@ def fetch_latest_full_dataset():
     
     return all_data
 
-# ==================== FLASK ROUTES ====================
+# ==================== FLASK ROUTES =====================
 
 @app.route("/")
 def dashboard():

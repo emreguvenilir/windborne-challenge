@@ -44,4 +44,4 @@ services:
 
 networks:
   default:
-    name: windborne-network
+    name: windborne-network #name
